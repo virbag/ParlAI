@@ -1,0 +1,28 @@
+FROM python:3.8-slim-buster AS build
+
+WORKDIR /app
+
+# Freshen and install deps...
+RUN apt update
+RUN apt install -y git make
+
+# To build website image direct from upstream source...
+#RUN git clone --depth 1 https://github.com/facebookresearch/ParlAI .
+#RUN pip install -r requirements.txt
+#RUN python setup.py develop
+#CMD python -m pytest -m unit
+
+# To build website image from local source...
+COPY website/ ./ 
+
+# Install generator dependencies...
+RUN pip install pytorch-pretrained-bert transformers
+
+# Generate...
+RUN cd website ; make
+
+# Pare down to generated products...
+FROM python:3.8-slim-buster as serve
+COPY --from=build /app/website/build ./ 
+
+CMD python -m http.server --directory .

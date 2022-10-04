@@ -1,0 +1,50 @@
+image: python:3.8
+
+pipelines:
+  default:
+    - step:
+        name: Install
+        caches: 
+          - pip
+        script:
+          - python -m pip install --progress-bar off pip setuptools==62.3.4
+          - python -m pip install --progress-bar off coverage
+          - python -m pip install --progress-bar off codecov
+          - mkdir -p ~/ParlAI/test-results
+          - pip install -v -r requirements.txt
+          - python setup.py develop
+          - python -c "import nltk; nltk.download('punkt')"
+          - python -c "import nltk; nltk.download('stopwords')"
+    - parallel:
+      - step:
+          name: Test
+          size: 2x
+          caches:
+            - pip
+          script:
+            - if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            - pip install pytest
+            #- pytest -v tests/* --junitxml=test-reports/report.xml
+            - python -c "import nltk; nltk.download('stopwords')"
+            - python -m pytest -m unit
+      - step:
+          name: Website
+          script:
+            - cd website
+            - make
+            - zip -r ../website.zip *
+            - cd ..
+          artifacts:
+          - website.zip
+      - step:
+          name: check for bad links
+          script:
+            - pip install linkchecker
+            - python -m http.server --directory website/build >/dev/null &
+            - linkchecker http://localhost:8000/
+            - kill %1
+      - step:
+          name: Build container
+          script:
+            - docker build -t website -f Dockerfile.Helm .
+            #- ECR | GHCR | Artifactory push
